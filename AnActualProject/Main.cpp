@@ -12,6 +12,10 @@ IDXGISwapChain * swapchain; // swap chain pointer (swap chain is a series of buf
 ID3D11Device * dev; // device pointer (a device is a representation of the gpu and manages the vram)
 ID3D11DeviceContext * devcon; // device context pointer (device context manages the gpu and the rendering pipeline(we use this to render))
 ID3D11RenderTargetView * backbuffer;
+float r = 1.0;
+float g = 1.0;
+float b = 1.0;
+float a = 1.0;
 
 void InitD3D(HWND HWnd); //prototype for the function that initialises direct3d
 void CleanD3D(void); //prototype for function that closes direct3d and releases its memory
@@ -67,10 +71,10 @@ void InitD3D(HWND hWnd)
 	devcon->RSSetViewports(1, &viewport);
 }
 
-void RenderFrame(void)
+void RenderFrame(float r, float b, float g, float a)
 {
 	//clear the back buffer by filling it with blue
-	devcon->ClearRenderTargetView(backbuffer, D3DXCOLOR(0.0f, 0.2f, 0.4f, 1.0f));
+	devcon->ClearRenderTargetView(backbuffer, D3DXCOLOR(r, g, b, a));
 
 	//do some rendering maybe eventually here
 
@@ -124,7 +128,9 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	//wait for a messasge, store it in msg
 	while (TRUE)
 	{
-		// check for messages
+		r -= 0.1f;
+		g -= 0.1f;
+		b -= 0.1f;
 		if (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE))
 		{
 			//translate keystroke messages
@@ -136,7 +142,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			if (msg.message == WM_QUIT)
 				break;
 		}
-		RenderFrame();
+		Sleep(1000);
+		RenderFrame(r, g, b, a);
 	}
 
 	CleanD3D();
