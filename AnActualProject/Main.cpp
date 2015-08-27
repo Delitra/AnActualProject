@@ -7,20 +7,30 @@
 #pragma comment (lib, "d3d11.lib")
 #pragma comment (lib, "d3dx11.lib")
 #pragma comment (lib, "d3dx10.lib")
-#define SCR_W 800
-#define SCR_H 600
+#define SCR_W 1920
+#define SCR_H 1080
 
 IDXGISwapChain * swapchain; // swap chain pointer (swap chain is a series of buffers which get switched in and out)
 ID3D11Device * dev; // device pointer (a device is a representation of the gpu and manages the vram)
 ID3D11DeviceContext * devcon; // device context pointer (device context manages the gpu and the rendering pipeline(we use this to render))
 ID3D11RenderTargetView * backbuffer;
+ID3D11InputLayout * pLayout; //input layout pointer
+ID3D11VertexShader * pVS; //vertex shader pointer
+ID3D11PixelShader * pPS; //pixel shader pointer
+ID3D11Buffer * pVBuffer; //vertex buffer pointer
 float r = 1.0;
 float g = 1.0;
 float b = 1.0;
 float a = 1.0;
 
+//a struct for a single vertex
+struct VERTEX {FLOAT X, Y, Z; D3DXCOLOR Color;};
+
 void InitD3D(HWND HWnd); //prototype for the function that initialises direct3d
+void RenderFrame(void); //prototype for rendering a frame
 void CleanD3D(void); //prototype for function that closes direct3d and releases its memory
+void InitGraphics(void); //prototype for creating a shape for rendering
+void InitPipeline(void); //loads shaders for the rendering pipeline
 //filling this with comments makes me feel really awkward when I have to commit them to github
 //hi github
 
@@ -74,6 +84,8 @@ void InitD3D(HWND hWnd)
 	viewport.Height = SCR_H;
 
 	devcon->RSSetViewports(1, &viewport);
+	InitPipeline();
+	InitGraphics();
 }
 
 void RenderFrame(float r, float b, float g, float a)
@@ -81,15 +93,80 @@ void RenderFrame(float r, float b, float g, float a)
 	//clear the back buffer by filling it with blue
 	devcon->ClearRenderTargetView(backbuffer, D3DXCOLOR(r, g, b, a));
 
-	//do some rendering maybe eventually here
+	//select which vertex buffer to display
+	UINT stride = sizeof(VERTEX);
+	UINT offset = 0;
+	devcon->IASetVertexBuffers(0, 1, &pVBuffer, &stride, &offset);
+	//what primitive type are we using
+	devcon->IASetPrimitiveTopology(D3D10_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	//draw the vertex buffer to the back buffer
+	devcon->Draw(3, 0);
 
 	//switch the front buffer and back buffer
 	swapchain->Present(0, 0);
 }
 
+void InitGraphics()
+{
+	//create a triangle using VERTEX
+	VERTEX OurVertices[] =
+	{
+		{0.0f, 0.5f, 0.0f, D3DXCOLOR(1.0f, 0.0f, 0.0f, 1.0f)},
+		{0.45f, -0.5f, 0.0f, D3DXCOLOR(0.0f, 1.0f, 0.0f, 1.0f)},
+		{-0.45f, -0.5f, 0.0f, D3DXCOLOR(0.0f, 0.0f, 1.0f, 1.0f)}
+	};
+	
+	//create the vertex buffer
+	D3D11_BUFFER_DESC bd;
+	ZeroMemory(&bd, sizeof(bd)); //clear out memory for the vertex buffer
+
+	bd.Usage = D3D11_USAGE_DYNAMIC; //write access by CPU and GPU
+	bd.ByteWidth = sizeof(VERTEX) * 3; //size of three vertex structs
+	bd.BindFlags = D3D11_BIND_VERTEX_BUFFER; // use as a vertex buffer
+	bd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE; //allow cpu to write in buffer
+
+	dev->CreateBuffer(&bd, NULL, &pVBuffer);
+
+	//copy vertices into buffer
+	D3D11_MAPPED_SUBRESOURCE ms;
+	devcon->Map(pVBuffer, NULL, D3D11_MAP_WRITE_DISCARD, NULL, &ms); //map buffer
+	memcpy(ms.pData, OurVertices, sizeof(OurVertices)); //copy data to buffer
+	devcon->Unmap(pVBuffer, NULL); //unmap buffer
+}
+
+void InitPipeline()
+{
+	//load the two shaders
+	ID3D10Blob *VS, *PS;
+	D3DX11CompileFromFile("shaders.shader", 0, 0, "VShader", "vs_4_0", 0, 0, 0, &VS, 0, 0);
+	D3DX11CompileFromFile("shaders.shader", 0, 0, "PShader", "ps_4_0", 0, 0, 0, &PS, 0, 0);
+
+	//encapsulate both shaders into objects
+	dev->CreateVertexShader(VS->GetBufferPointer(), VS->GetBufferSize(), NULL, &pVS);
+	dev->CreatePixelShader(PS->GetBufferPointer(), PS->GetBufferSize(), NULL, &pPS);
+
+	//set shader objects
+	devcon->VSSetShader(pVS, 0, 0);
+	devcon->PSSetShader(pPS, 0, 0);
+
+	//create input layout object
+	D3D11_INPUT_ELEMENT_DESC ied[] =
+	{
+		{"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0},
+		{ "COLOR", 0, DXGI_FORMAT_R32G32B32A32_FLOAT, 0, 12, D3D11_INPUT_PER_VERTEX_DATA, 0 }
+	};
+
+	dev->CreateInputLayout(ied, 2, VS->GetBufferPointer(), VS->GetBufferSize(), &pLayout);
+	devcon->IASetInputLayout(pLayout);
+}
+
 void CleanD3D()
 {
 	swapchain->SetFullscreenState(FALSE, NULL);    //get out of fullscreen before closing to avoid issues
+	pLayout->Release();
+	pVS->Release();
+	pPS->Release();
+	pVBuffer->Release();
 	swapchain->Release();
 	backbuffer->Release();
 	dev->Release();
