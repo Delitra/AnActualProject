@@ -1,5 +1,91 @@
 #include <windows.h>
 #include <windowsx.h>
+#include <d3d11.h>
+#include <d3dx11.h>
+#include <d3dx10.h>
+
+#pragma comment (lib, "d3d11.lib")
+#pragma comment (lib, "d3dx11.lib")
+#pragma comment (lib, "d3dx10.lib")
+
+IDXGISwapChain * swapchain; // swap chain pointer (swap chain is a series of buffers which get switched in and out)
+ID3D11Device * dev; // device pointer (a device is a representation of the gpu and manages the vram)
+ID3D11DeviceContext * devcon; // device context pointer (device context manages the gpu and the rendering pipeline(we use this to render))
+ID3D11RenderTargetView * backbuffer;
+
+void InitD3D(HWND HWnd); //prototype for the function that initialises direct3d
+void CleanD3D(void); //prototype for function that closes direct3d and releases its memory
+//filling this with comments makes me feel really awkward when I have to commit them to github
+//hi github
+
+void InitD3D(HWND hWnd)
+{
+	DXGI_SWAP_CHAIN_DESC scd; //struct for swap chain info
+	//clearing the memory for the struct just like the wndclassex in winmain
+	ZeroMemory(&scd, sizeof(DXGI_SWAP_CHAIN_DESC));
+
+	scd.BufferCount = 1;  // one buffer
+	scd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM; // 32 bit color
+	scd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT; // how to use the swap chain (this one is for drawing to the back buffer)
+	scd.OutputWindow = hWnd; // window to use, this is from the argument
+	scd.SampleDesc.Count = 4; // how many multisamples (antialiasing)
+	scd.Windowed = TRUE; //windowed or fullscreen
+
+	//create a device, device context and swap chain
+	D3D11CreateDeviceAndSwapChain(NULL, //which graphics adapter to use? NULL lets DXGI decide
+		D3D_DRIVER_TYPE_HARDWARE, //how to render
+		NULL, //something about software rendering
+		NULL, //some flags (multi/singlethread, debug, reference rendering, direct2d)
+		NULL, //if you need the end user to have certain hardware capabilities, this is where you set that
+		NULL, //how many did you have in your previous list you scrub
+		D3D11_SDK_VERSION, //eh
+		&scd, //swap chain struct
+		&swapchain, //swap chain object
+		&dev, //device object
+		NULL, //feature level variable
+		&devcon); //device context object
+
+	//get backbuffer address
+	ID3D11Texture2D * pBackBuffer;
+	swapchain->GetBuffer(0, __uuidof(ID3D11Texture2D), (LPVOID*)&pBackBuffer);
+
+	//create a render target using the back buffer address
+	dev->CreateRenderTargetView(pBackBuffer, NULL, &backbuffer);
+	pBackBuffer->Release();
+	//set the render target as the back buffer
+	devcon->OMSetRenderTargets(1, &backbuffer, NULL);
+
+	//set the viewport
+	D3D11_VIEWPORT viewport;
+	ZeroMemory(&viewport, sizeof(D3D11_VIEWPORT));
+
+	viewport.TopLeftX = 0;
+	viewport.TopLeftY = 0;
+	viewport.Width = 800;
+	viewport.Height = 600;
+
+	devcon->RSSetViewports(1, &viewport);
+}
+
+void RenderFrame(void)
+{
+	//clear the back buffer by filling it with blue
+	devcon->ClearRenderTargetView(backbuffer, D3DXCOLOR(0.0f, 0.2f, 0.4f, 1.0f));
+
+	//do some rendering maybe eventually here
+
+	//switch the front buffer and back buffer
+	swapchain->Present(0, 0);
+}
+
+void CleanD3D()
+{
+	swapchain->Release();
+	backbuffer->Release();
+	dev->Release();
+	devcon->Release();
+}
+
 
 LRESULT CALLBACK WindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam); //here we prototype the windowproc function so we can call it in WinMain before defining it
 
@@ -28,6 +114,8 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 
 	ShowWindow(hWnd, nShowCmd); //put our window on the screen
 
+	InitD3D(hWnd);
+
 		//now that we have a window we can go into the main loop
 
 		//msg is a struct that holds windows events
@@ -48,11 +136,10 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 			if (msg.message == WM_QUIT)
 				break;
 		}
-		else
-		{
-
-		}
+		RenderFrame();
 	}
+
+	CleanD3D();
 
 	return msg.wParam;
 }
